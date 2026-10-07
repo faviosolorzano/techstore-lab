@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TechStore - Gestión de Inventario</title>
+<style>
+  :root { --bg:#f4f6fb; --card:#fff; --ink:#1c2333; --muted:#6b7385; --brand:#2f5bea; --bad:#c62828; --ok:#2e7d32; --line:#e2e6ef; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, Segoe UI, sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:var(--brand); color:#fff; padding:14px 24px; display:flex; justify-content:space-between; align-items:center; }
+  header h1 { font-size:18px; margin:0; }
+  main { max-width:900px; margin:24px auto; padding:0 16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:24px; margin-bottom:16px; }
+  .auth { max-width:420px; margin:0 auto; }
+  h2 { margin-top:0; font-size:18px; }
+  label { display:block; font-size:13px; color:var(--muted); margin:12px 0 4px; }
+  input, select { width:100%; padding:10px; border:1px solid var(--line); border-radius:6px; font-size:14px; }
+  button { padding:10px 16px; border:0; border-radius:6px; background:var(--brand); color:#fff; font-size:14px; cursor:pointer; }
+  button.secondary { background:#e8ecf7; color:var(--ink); }
+  button.danger { background:var(--bad); }
+  button.sm { padding:5px 10px; font-size:12px; }
+  .full { width:100%; margin-top:16px; }
+  .msg { margin-top:12px; padding:10px; border-radius:6px; font-size:13px; display:none; }
+  .msg.err { display:block; background:#fdecea; color:var(--bad); }
+  .msg.ok { display:block; background:#e8f5e9; color:var(--ok); }
+  .tabs { display:flex; gap:8px; margin-bottom:12px; }
+  .social { display:flex; gap:8px; margin-top:12px; }
+  .social a { flex:1; text-align:center; padding:10px; border:1px solid var(--line); border-radius:6px; text-decoration:none; color:var(--ink); font-size:14px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:8px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:10px; background:#e8ecf7; font-size:12px; }
+  .hidden { display:none !important; }
+  .center { text-align:center; }
+  .code { font-size:24px; letter-spacing:8px; text-align:center; }
+  .row { display:flex; gap:8px; align-items:center; }
+  code { background:#eef1f8; padding:2px 6px; border-radius:4px; word-break:break-all; }
+</style>
+</head>
+<body>
+<header>
+  <h1>TechStore · Gestión de Inventario</h1>
+  <div id="whoami" class="hidden row"><span id="who"></span><button class="secondary sm" onclick="logout()">Cerrar sesión</button></div>
+</header>
+<main>
+
+  <!-- Registro / Login -->
+  <section id="auth" class="card auth">
+    <div class="tabs">
+      <button id="tabLogin" onclick="showTab('login')">Iniciar sesión</button>
+      <button id="tabReg" class="secondary" onclick="showTab('register')">Registrarse</button>
+    </div>
+
+    <form id="loginForm" onsubmit="return doLogin(event)">
+      <h2>Iniciar sesión</h2>
+      <label>Email</label><input id="lEmail" type="email" required>
+      <label>Contraseña</label><input id="lPass" type="password" required>
+      <button class="full">Entrar</button>
+      <div class="social">
+        <a href="/auth/google">Google</a>
+        <a href="/auth/github">GitHub</a>
+      </div>
+      <div id="lMsg" class="msg"></div>
+    </form>
+
+    <form id="regForm" class="hidden" onsubmit="return doRegister(event)">
+      <h2>Crear cuenta</h2>
+      <label>Nombre completo</label><input id="rName" required>
+      <label>Email</label><input id="rEmail" type="email" required>
+      <label>Contraseña</label><input id="rPass" type="password" required>
+      <small style="color:var(--muted)">Mínimo 8 caracteres, una mayúscula, un número y un carácter especial.</small>
+      <label>Tienda asignada</label>
+      <select id="rStore"><option>Lima Centro</option><option>Miraflores</option><option>San Isidro</option></select>
+      <button class="full">Registrarme</button>
+      <div id="rMsg" class="msg"></div>
+    </form>
+  </section>
+
+  <!-- MFA -->
+  <section id="mfa" class="card auth hidden">
+    <h2>Verificación en dos pasos</h2>
+    <div id="mfaSetup" class="hidden center">
+      <p>Escanea este QR con <b>Google Authenticator</b> (o similar):</p>
+      <img id="qr" alt="QR MFA" width="200" height="200">
+      <p style="font-size:12px">¿No puedes escanear? Clave manual: <code id="secret"></code></p>
+    </div>
+    <p id="mfaHint">Ingresa el código de 6 dígitos de tu app autenticadora.</p>
+    <input id="mfaCode" class="code" maxlength="6" inputmode="numeric" placeholder="000000">
+    <button class="full" onclick="doVerify()">Verificar</button>
+    <div id="mMsg" class="msg"></div>
+  </section>
+
+  <!-- Dashboard -->
+  <section id="app" class="hidden">
+    <div class="card">
+      <h2>Mi perfil</h2>
+      <div id="profile"></div>
+    </div>
+    <div class="card">
+      <h2>Productos</h2>
+      <table><thead><tr><th>Producto</th><th>Tienda</th><th>Precio</th><th>Stock</th><th>Acciones</th></tr></thead><tbody id="products"></tbody></table>
+      <div id="pMsg" class="msg"></div>
+    </div>
+    <div class="card" id="reportsCard">
+      <h2>Reporte de inventario</h2>
+      <table><thead><tr><th>Tienda</th><th>Productos</th><th>Unidades</th><th>Valor</th></tr></thead><tbody id="reports"></tbody></table>
+    </div>
+    <div class="card" id="usersCard">
+      <h2>Usuarios</h2>
+      <table><thead><tr><th>Nombre</th><th>Email</th><th>Tienda</th><th>Rol</th></tr></thead><tbody id="users"></tbody></table>
+    </div>
+  </section>
+</main>
+
+<script>
+let tempToken = null, token = sessionStorage.getItem('token'), me = null;
+const $ = (id) => document.getElementById(id);
+const show = (id, v = true) => $(id).classList.toggle('hidden', !v);
+function msg(id, text, ok) { const e = $(id); e.className = 'msg ' + (ok ? 'ok' : 'err'); e.textContent = text; }
+
+async function api(url, method = 'GET', body, auth) {
+  const r = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(auth ? { Authorization: 'Bearer ' + auth } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) };
+}
+
+function showTab(t) {
+  show('loginForm', t === 'login'); show('regForm', t === 'register');
+  $('tabLogin').className = t === 'login' ? '' : 'secondary';
+  $('tabReg').className = t === 'register' ? '' : 'secondary';
+}
+
+async function doRegister(e) {
+  e.preventDefault();
+  const r = await api('/api/register', 'POST', {
+    fullName: $('rName').value, email: $('rEmail').value, password: $('rPass').value, store: $('rStore').value,
+  });
+  if (r.ok) { msg('rMsg', 'Cuenta creada. Ahora inicia sesión.', true); setTimeout(() => showTab('login'), 1200); }
+  else msg('rMsg', (r.data.errors || [r.data.error]).join(' · '));
+  return false;
+}
+
+async function doLogin(e) {
+  e.preventDefault();
+  const r = await api('/api/login', 'POST', { email: $('lEmail').value, password: $('lPass').value });
+  if (!r.ok) {
+    const left = r.data.remainingAttempts !== undefined ? ` (intentos restantes: ${r.data.remainingAttempts})` : '';
+    return msg('lMsg', r.data.error + left), false;
+  }
+  startMfa(r.data.step, r.data.tempToken);
+  return false;
+}
+
+async function startMfa(step, t) {
+  tempToken = t;
+  show('auth', false); show('mfa');
+  $('mfaCode').value = ''; $('mMsg').className = 'msg';
+  if (step === 'mfa_setup_required') {
+    const r = await api('/api/mfa/setup', 'POST', null, tempToken);
+    $('qr').src = r.data.qr; $('secret').textContent = r.data.secret; show('mfaSetup');
+    $('mfaHint').textContent = 'Primero escanea el QR y luego ingresa el código de 6 dígitos.';
+  } else { show('mfaSetup', false); }
+}
+
+async function doVerify() {
+  const r = await api('/api/mfa/verify', 'POST', { code: $('mfaCode').value }, tempToken);
+  if (r.ok) { token = r.data.token; sessionStorage.setItem('token', token); show('mfa', false); loadApp(); return; }
+  msg('mMsg', r.data.error + (r.data.remainingAttempts !== undefined ? ` (intentos restantes: ${r.data.remainingAttempts})` : ''));
+  if (r.status === 429 || r.data.remainingAttempts === 0) setTimeout(logout, 2500);
+}
+
+function logout() { sessionStorage.removeItem('token'); location.href = '/'; }
+
+async function loadApp() {
+  const m = await api('/api/me', 'GET', null, token);
+  if (!m.ok) return logout();
+  me = m.data;
+  show('auth', false); show('app'); show('whoami');
+  $('who').textContent = `${me.fullName} · ${me.role}`;
+  $('profile').innerHTML = `<b>${me.fullName}</b> — ${me.email}<br>Tienda: ${me.store} · Rol: <span class="badge">${me.role}</span> · MFA: ${me.mfaEnabled ? 'activado' : 'no'}`;
+  loadProducts();
+  const rep = await api('/api/reports', 'GET', null, token);
+  show('reportsCard', rep.ok);
+  if (rep.ok) $('reports').innerHTML = rep.data.map(r => `<tr><td>${r.store}</td><td>${r.productos}</td><td>${r.unidades}</td><td>S/ ${r.valor_inventario}</td></tr>`).join('');
+  const us = await api('/api/users', 'GET', null, token);
+  show('usersCard', us.ok);
+  if (us.ok) $('users').innerHTML = us.data.map(u => `<tr><td>${u.fullName}</td><td>${u.email}</td><td>${u.store}</td><td>${
+    me.role === 'admin'
+      ? `<select onchange="setRole(${u.id}, this.value)">${['admin','gerente','ventas','auditor'].map(r => `<option ${r===u.role?'selected':''}>${r}</option>`).join('')}</select>`
+      : `<span class="badge">${u.role}</span>`}</td></tr>`).join('');
+}
+
+async function loadProducts() {
+  const r = await api('/api/products', 'GET', null, token);
+  $('products').innerHTML = r.data.map(p => `<tr><td>${p.name}</td><td>${p.store}</td><td>S/ ${p.price}</td><td>${p.stock}</td><td class="row">
+    <button class="secondary sm" onclick="editStock(${p.id}, ${p.stock})">Stock</button>
+    <button class="secondary sm" onclick="editPrice(${p.id}, ${p.price})">Precio</button>
+    <button class="danger sm" onclick="delProduct(${p.id})">Eliminar</button></td></tr>`).join('');
+}
+async function editStock(id, cur) {
+  const v = prompt('Nuevo stock:', cur); if (v === null) return;
+  const r = await api(`/api/products/${id}/stock`, 'PATCH', { stock: parseInt(v, 10) }, token);
+  r.ok ? (msg('pMsg', 'Stock actualizado', true), loadProducts()) : msg('pMsg', r.data.error);
+}
+async function editPrice(id, cur) {
+  const v = prompt('Nuevo precio:', cur); if (v === null) return;
+  const r = await api(`/api/products/${id}/price`, 'PUT', { price: parseFloat(v) }, token);
+  r.ok ? (msg('pMsg', 'Precio actualizado', true), loadProducts()) : msg('pMsg', r.data.error);
+}
+async function delProduct(id) {
+  if (!confirm('¿Eliminar producto?')) return;
+  const r = await api(`/api/products/${id}`, 'DELETE', null, token);
+  r.ok ? (msg('pMsg', 'Producto eliminado', true), loadProducts()) : msg('pMsg', r.data.error);
+}
+async function setRole(id, role) {
+  const r = await api(`/api/users/${id}/role`, 'PUT', { role }, token);
+  r.ok ? loadApp() : alert(r.data.error);
+}
+
+// Retorno del login social: /#step=...&tempToken=...
+if (new URLSearchParams(location.search).get('error') === 'oauth') {
+  msg('lMsg', 'No se pudo iniciar sesión con la red social. Intenta de nuevo.');
+  history.replaceState(null, '', '/');
+}
+const hash = new URLSearchParams(location.hash.slice(1));
+if (hash.get('tempToken')) { history.replaceState(null, '', '/'); startMfa(hash.get('step'), hash.get('tempToken')); }
+else if (token) loadApp();
+</script>
+</body>
+</html>
